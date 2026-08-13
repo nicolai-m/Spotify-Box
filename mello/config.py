@@ -119,9 +119,9 @@ PROGRESS_BAR_WIDTH = 8
 
 # Default volume levels (speaker = ALSA speaker, bt = PipeWire bluetooth sink)
 DEFAULT_VOLUME_LEVELS = [
-    {'speaker': 88, 'bt': 20, 'icon': 'volume_none'},
-    {'speaker': 94, 'bt': 40, 'icon': 'volume_low'},
-    {'speaker': 98, 'bt': 65, 'icon': 'volume_high'},
+    {'speaker': 80, 'bt': 20, 'icon': 'volume_none'},
+    {'speaker': 85, 'bt': 40, 'icon': 'volume_low'},
+    {'speaker': 90, 'bt': 65, 'icon': 'volume_high'},
 ]
 
 # Valid ranges for volume adjustment (+/- 1% per tap)
