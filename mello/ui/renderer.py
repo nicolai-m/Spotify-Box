@@ -288,11 +288,11 @@ class Renderer:
         else:
             # Normal empty state: Spotify instructions
             self.settings_button_rect = None
-            line1 = self._render_text_rotated('Musik über Spotify auf der Malti-Box abspielen', self.font_medium, COLORS['text_secondary'])
+            line1 = self._render_text_rotated('Verbinde Spotify mit der Malti-Box um Musik zu hören', self.font_medium, COLORS['text_secondary'])
             line1_rect = line1.get_rect(center=(center_x - 30, center_y))
             self.screen.blit(line1, line1_rect)
 
-            line2 = self._render_text_rotated('Drücke + zum speichern von Alben', self.font_medium, COLORS['text_secondary'])
+            line2 = self._render_text_rotated('Drücke + um ein/e Album/Playlist zu speichern', self.font_medium, COLORS['text_secondary'])
             line2_rect = line2.get_rect(center=(center_x - 60, center_y))
             self.screen.blit(line2, line2_rect)
     
