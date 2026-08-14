@@ -292,7 +292,7 @@ class Renderer:
             line1_rect = line1.get_rect(center=(center_x - 30, center_y))
             self.screen.blit(line1, line1_rect)
 
-            line2 = self._render_text_rotated('Drücke + zum speichern', self.font_medium, COLORS['text_secondary'])
+            line2 = self._render_text_rotated('Drücke + zum speichern von Alben', self.font_medium, COLORS['text_secondary'])
             line2_rect = line2.get_rect(center=(center_x - 60, center_y))
             self.screen.blit(line2, line2_rect)
     
