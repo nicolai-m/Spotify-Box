@@ -13,6 +13,7 @@ The current product principle stays unchanged: the UI must remain simple, touch-
 - Allow video/Streaming mode to be globally disabled so the device can be locked to audio-only operation.
 - Add a local web administration interface reachable through the box IP/hostname for configuration and device management.
 - Allow the web admin to enable/disable video, configure supported settings, inspect status, trigger updates, restart, and shut down the box.
+- Allow the owner to optionally protect the local web administration interface with a password that can be set, changed, or removed from the admin settings.
 - Preserve Raspberry Pi 3 support for the core audio experience.
 - Treat browser/video streaming on Raspberry Pi 3 as experimental; target Raspberry Pi 4/5 for the full video experience.
 - Keep upgrades safe for devices already installed in the field.
@@ -55,6 +56,7 @@ Mello UI
    +-- DeviceControl / Settings
           |
           +-- local Web Admin
+          +-- optional AdminAuth
           +-- update/restart/shutdown
           +-- WiFi/Bluetooth/settings
           +-- health/status
@@ -244,25 +246,41 @@ or via the current LAN IP address.
 - [ ] Add restart and shutdown actions with explicit confirmation.
 - [ ] Consider factory reset only behind an additional confirmation/protection step.
 - [ ] Keep settings synchronized between touchscreen and web UI through one shared settings/service layer.
+- [ ] Add an Admin Security section where the owner can optionally set a password, change it, or remove password protection again.
+- [ ] Clearly show whether the web admin is currently protected or running without a password.
+
+### Optional password protection
+
+Password protection is optional because some deployments may only use the box inside a trusted home LAN. The owner must be able to decide whether the local web admin requires authentication.
+
+- [ ] Allow initial setup and the Admin Security page to enable password protection without editing files or using SSH.
+- [ ] When a password is configured, require authentication before entering the administration interface and before any configuration/system action.
+- [ ] Provide an authenticated way to change the current password.
+- [ ] Provide an authenticated, explicitly confirmed way to remove the password and return to unprotected LAN-only administration.
+- [ ] Store only a modern salted password hash; never persist the plaintext password.
+- [ ] Use session-based authentication with logout and reasonable session expiry when password protection is enabled.
+- [ ] Rate-limit failed login attempts when password protection is enabled.
+- [ ] If no password is configured, show a visible warning in the admin UI that anyone with access to the local network may be able to administer the box.
+- [ ] Password-protection state and the hash must survive normal reboots/updates while remaining device-local.
 
 ### Security and architecture rules
 
 - [ ] Bind the admin interface to local/LAN access by default; never intentionally expose it to the public internet during installation.
-- [ ] Require authentication or a parent/admin PIN/password before allowing configuration or system actions.
-- [ ] Store password/PIN material safely as a hash, never plaintext in git or logs.
-- [ ] Protect state-changing requests against CSRF and accidental repeated submissions.
+- [ ] Authentication is optional, but when an admin password is configured it must protect the entire admin interface and all privileged actions consistently.
+- [ ] Store password material safely as a hash, never plaintext in git or logs.
+- [ ] Protect state-changing requests against CSRF and accidental repeated submissions regardless of whether password protection is enabled.
 - [ ] Rate-limit authentication attempts and security-sensitive actions where practical.
 - [ ] Use explicit typed/allow-listed actions for update, reboot, shutdown, networking, and service control. HTTP input must never become an arbitrary shell command.
 - [ ] Separate read-only status endpoints from privileged mutation endpoints.
 - [ ] Never expose Spotify credentials, browser cookies, Widevine/provider sessions, tokens, or other sensitive account information through the admin UI/API.
 - [ ] Require explicit confirmation for update, reboot, shutdown, reset, and network changes.
-- [ ] Log who/what action was requested and whether it succeeded, but never log passwords, cookies, tokens, or provider session data.
+- [ ] Log what action was requested and whether it succeeded, but never log passwords, cookies, tokens, or provider session data.
 - [ ] Make the web-admin service resilient to Mello/Pygame or browser-mode restarts so remote administration remains available when practical.
 - [ ] Add any new web service/systemd/firewall/sudoers dependencies to both fresh-install setup and `pi/migrate.sh`.
 
 ### Exit criteria
 
-A parent/admin on the same local network can securely open the box by hostname/IP, inspect its state, toggle audio-only/video mode, change supported settings, update the software, and restart or shut down the box without SSH. The interface is not publicly exposed by default and cannot execute arbitrary commands.
+A parent/admin on the same local network can open the box by hostname/IP, inspect its state, toggle audio-only/video mode, change supported settings, update the software, and restart or shut down the box without SSH. The owner can optionally enable password protection directly in the admin interface, later change or remove it, and the interface clearly reports whether it is protected. The interface is not publicly exposed by default and cannot execute arbitrary commands.
 
 ## Phase 7 - Streaming UX and parental controls
 
@@ -301,7 +319,7 @@ Priority: ongoing
 7. Provider availability is capability-based, not promised by name. DRM/browser compatibility can change outside this project.
 8. Keep credentials and cookies out of git. Browser profiles live only on the device.
 9. The web admin must expose explicit application/device actions, never a general-purpose remote shell.
-10. Local web administration must be authenticated and LAN-only by default.
+10. Local web administration is LAN-only by default. Password protection is optional, but when enabled it must be enforced consistently and stored securely.
 11. Log failures and gather evidence before adding special-case workarounds.
 12. Raspberry Pi 3 performance is a constraint, not an excuse for fragile global optimizations that hurt Pi 4/5.
 13. Keep the normal music UI simple even as the underlying architecture becomes more capable.
@@ -314,7 +332,7 @@ Priority: ongoing
 4. Add AirPlay audio.
 5. Add internet radio/local media.
 6. Introduce the shared settings/device-control layer needed by both touchscreen and future web administration.
-7. Add the local web admin with status, video lock, settings, update, restart, and shutdown controls.
+7. Add the local web admin with status, optional password protection, video lock, settings, update, restart, and shutdown controls.
 8. Add the Streaming launcher, global video policy, and kiosk-mode lifecycle.
 9. Validate YouTube first because it is useful without relying on the full commercial DRM matrix.
 10. Validate Netflix, Prime Video, Disney+, and WOW individually on Pi 3/4/5.
