@@ -10,9 +10,10 @@ The current product principle stays unchanged: the UI must remain simple, touch-
 - Allow audio from other phone apps without requiring a dedicated integration for every music service.
 - Add additional first-class audio sources such as AirPlay, internet radio, and local/NAS media.
 - Add an optional dedicated Streaming mode for browser-based services such as YouTube, Netflix, Prime Video, Disney+, and WOW.
+- Make video providers configurable so additional browser-based streaming services can be added and managed without changing application code.
 - Allow video/Streaming mode to be globally disabled so the device can be locked to audio-only operation.
 - Add a local web administration interface reachable through the box IP/hostname for configuration and device management.
-- Allow the web admin to enable/disable video, configure supported settings, inspect status, trigger updates, restart, and shut down the box.
+- Allow the web admin to enable/disable video, manage video providers, configure supported settings, inspect status, trigger updates, restart, and shut down the box.
 - Allow the owner to optionally protect the local web administration interface with a password that can be set, changed, or removed from the admin settings.
 - Preserve Raspberry Pi 3 support for the core audio experience.
 - Treat browser/video streaming on Raspberry Pi 3 as experimental; target Raspberry Pi 4/5 for the full video experience.
@@ -46,23 +47,24 @@ Mello UI
    +-- StreamingManager
    |      |
    |      +-- VideoPolicy / video_enabled
-   |      +-- YouTube
-   |      +-- Netflix
-   |      +-- Prime Video
-   |      +-- Disney+
-   |      +-- WOW
-   |      +-- future browser providers
+   |      +-- ProviderRegistry
+   |             |
+   |             +-- built-in providers
+   |             +-- admin-defined providers
    |
    +-- DeviceControl / Settings
           |
           +-- local Web Admin
           +-- optional AdminAuth
+          +-- provider management
           +-- update/restart/shutdown
           +-- WiFi/Bluetooth/settings
           +-- health/status
 ```
 
 Audio sources share a common playback model where practical. Browser streaming remains a separate operating mode because the browser needs to own the display and may require different audio/video services. The local web admin should call typed application/device-control APIs instead of reaching directly into Pygame internals or executing arbitrary commands.
+
+Video providers should be data-driven. The launcher must read provider definitions from a registry/configuration layer instead of hard-coding one button and launch path per service.
 
 ## Phase 0 - Repository and update ownership
 
@@ -145,7 +147,7 @@ Priority: medium
 
 Spotify, Bluetooth receiver, AirPlay, radio, and local/network media can coexist behind the same source-selection model.
 
-## Phase 4 - Streaming launcher, video policy, and browser kiosk mode
+## Phase 4 - Streaming launcher, provider registry, video policy, and browser kiosk mode
 
 Priority: medium
 
@@ -157,16 +159,19 @@ Proposed lifecycle:
 Mello/Pygame mode
     -> check video_enabled policy
     -> user selects Streaming
+    -> choose enabled provider from ProviderRegistry
     -> pause/stop active audio source
     -> persist Mello state
     -> release display resources
     -> start lightweight compositor/browser in kiosk mode
-    -> open selected provider
+    -> open provider start URL with provider-specific browser profile
     -> user exits via protected Home/Back action
     -> stop browser
     -> restore display
     -> restart/resume Mello mode
 ```
+
+### Video policy
 
 - [ ] Add persistent `video_enabled` / audio-only policy state.
 - [ ] When video is disabled, remove/hide the Streaming launcher from the child-facing UI and reject all attempts to start browser streaming.
@@ -174,9 +179,26 @@ Mello/Pygame mode
 - [ ] Allow the policy to be changed from protected local settings and from the web administration interface.
 - [ ] If video is disabled remotely while Streaming mode is active, safely close the browser session and return to Mello/audio mode.
 - [ ] Keep per-provider enable/disable settings separate from the global video switch.
+
+### Provider registry
+
+- [ ] Introduce a persistent `ProviderRegistry` or equivalent provider configuration service.
+- [ ] Ship sensible built-in provider presets for YouTube, Netflix, Prime Video, Disney+, and WOW without making those names special cases in the launcher.
+- [ ] Allow additional browser-based video providers to be added without a code change.
+- [ ] Define provider fields such as stable ID, display name, start URL, enabled state, order, optional icon/artwork, browser-profile identifier, and optional capability/compatibility notes.
+- [ ] Allow provider definitions to be edited, enabled/disabled, reordered, and removed from the web admin.
+- [ ] Distinguish shipped presets from user-added providers so presets can receive safe default updates without overwriting owner customizations.
+- [ ] Allow a removed built-in preset to be restored to its default definition.
+- [ ] Keep one isolated persistent browser profile per provider so logins/cookies survive and different providers do not unnecessarily share session state.
+- [ ] Validate configured launch URLs before saving/launching. Accept only intended web schemes such as `https://` (and `http://` only when explicitly allowed for trusted local services); reject dangerous schemes such as `file:`, `javascript:`, `data:`, or arbitrary command/protocol handlers.
+- [ ] Treat custom providers as unverified until tested; adding a URL must never imply that DRM, playback, touch, or hardware acceleration is supported.
+- [ ] Never collect or store provider account passwords in Mello settings. Provider login remains inside the provider browser profile.
+
+### Kiosk launcher
+
 - [ ] Add a clean `Streaming` entry point to the UI without cluttering the normal music experience.
-- [ ] Add a provider launcher for YouTube, Netflix, Prime Video, Disney+, WOW, and future providers.
-- [ ] Store provider definitions in configuration rather than hard-coding UI behavior.
+- [ ] Render the streaming launcher from enabled provider definitions rather than hard-coded provider buttons.
+- [ ] Store provider definitions in device-local configuration and keep a migration/versioning strategy for future schema changes.
 - [ ] Use isolated persistent browser profiles so logins/cookies survive per provider.
 - [ ] Never store service passwords or authentication secrets in the repository.
 - [ ] Add a reliable Home/Back escape path that cannot be hidden by a provider website.
@@ -187,7 +209,7 @@ Mello/Pygame mode
 
 ### Exit criteria
 
-When video is enabled, the user can enter Streaming mode, select a provider, use it fullscreen, and reliably return to the normal Mello UI without rebooting. When video is disabled, the same device behaves as an audio-only box and no browser streaming path can be started.
+When video is enabled, the user can enter Streaming mode and launch any enabled provider from the registry. A parent/admin can add another compatible browser service without changing application code, and it appears in the launcher after being enabled. When video is disabled, the same device behaves as an audio-only box and no browser streaming path can be started.
 
 ## Phase 5 - Provider and DRM validation
 
@@ -204,10 +226,12 @@ Test matrix:
 | Prime Video | experimental | target | target | Validate Widevine/DRM |
 | Disney+ | experimental | target | target | Validate Widevine/DRM |
 | WOW | experimental | target | target | Validate browser/DRM compatibility |
+| Custom provider | unverified | unverified | unverified | Validate individually after configuration |
 
 - [ ] Build a reusable provider smoke-test checklist.
 - [ ] Validate login, profile selection, playback start, pause, seek, audio, fullscreen, and logout behavior.
-- [ ] Record actual supported resolution/codec/hardware acceleration per Pi generation.
+- [ ] Record actual supported resolution/codec/hardware acceleration per Pi generation for built-in providers.
+- [ ] Allow custom provider entries to store owner-visible compatibility notes without representing them as officially validated.
 - [ ] Detect hardware capabilities at runtime and hide/mark unsupported or experimental features honestly.
 - [ ] Do not add workarounds that bypass provider DRM or terms of service.
 
@@ -238,6 +262,12 @@ or via the current LAN IP address.
 - [ ] Show device status: hostname, IP address, software version, uptime, active source, playback state, update state, and relevant health information.
 - [ ] Add a global Video / Streaming enable-disable switch.
 - [ ] Add per-provider enable-disable controls for browser streaming services.
+- [ ] Add a Video Providers administration page/list.
+- [ ] Allow a provider to be added with at least a name and start URL, plus optional icon/artwork.
+- [ ] Allow providers to be edited, enabled/disabled, reordered, and removed.
+- [ ] Allow built-in provider presets to be restored to defaults.
+- [ ] Show whether a provider is built-in, custom, validated, experimental, unsupported, or not yet tested where that information exists.
+- [ ] Apply provider-list changes to the touchscreen launcher without requiring a reboot where practical.
 - [ ] Allow audio-only operation to be selected and persisted across reboots/updates.
 - [ ] Expose safe audio settings such as speaker/Bluetooth volume levels, auto-pause, and progress-memory settings.
 - [ ] Expose source controls where useful: Spotify status, Bluetooth pairing/connection, AirPlay enablement, radio configuration, and local-media settings as those features are implemented.
@@ -270,23 +300,25 @@ Password protection is optional because some deployments may only use the box in
 - [ ] Store password material safely as a hash, never plaintext in git or logs.
 - [ ] Protect state-changing requests against CSRF and accidental repeated submissions regardless of whether password protection is enabled.
 - [ ] Rate-limit authentication attempts and security-sensitive actions where practical.
-- [ ] Use explicit typed/allow-listed actions for update, reboot, shutdown, networking, and service control. HTTP input must never become an arbitrary shell command.
+- [ ] Use explicit typed/allow-listed actions for update, reboot, shutdown, networking, provider management, and service control. HTTP input must never become an arbitrary shell command.
+- [ ] Validate provider URLs and provider IDs server-side; never trust browser-side validation alone.
 - [ ] Separate read-only status endpoints from privileged mutation endpoints.
 - [ ] Never expose Spotify credentials, browser cookies, Widevine/provider sessions, tokens, or other sensitive account information through the admin UI/API.
-- [ ] Require explicit confirmation for update, reboot, shutdown, reset, and network changes.
+- [ ] Require explicit confirmation for update, reboot, shutdown, reset, network changes, and destructive provider operations where appropriate.
 - [ ] Log what action was requested and whether it succeeded, but never log passwords, cookies, tokens, or provider session data.
 - [ ] Make the web-admin service resilient to Mello/Pygame or browser-mode restarts so remote administration remains available when practical.
 - [ ] Add any new web service/systemd/firewall/sudoers dependencies to both fresh-install setup and `pi/migrate.sh`.
 
 ### Exit criteria
 
-A parent/admin on the same local network can open the box by hostname/IP, inspect its state, toggle audio-only/video mode, change supported settings, update the software, and restart or shut down the box without SSH. The owner can optionally enable password protection directly in the admin interface, later change or remove it, and the interface clearly reports whether it is protected. The interface is not publicly exposed by default and cannot execute arbitrary commands.
+A parent/admin on the same local network can open the box by hostname/IP, inspect its state, toggle audio-only/video mode, manage the provider list, change supported settings, update the software, and restart or shut down the box without SSH. The owner can optionally enable password protection directly in the admin interface, later change or remove it, and the interface clearly reports whether it is protected. Additional compatible video services can be added from the admin interface without a code deployment. The interface is not publicly exposed by default and cannot execute arbitrary commands.
 
 ## Phase 7 - Streaming UX and parental controls
 
 Priority: medium/low
 
 - [ ] Keep provider selection intentionally small and icon-driven.
+- [ ] Render provider order and visibility from the provider registry.
 - [ ] Add optional parent-controlled enable/disable toggles per streaming provider.
 - [ ] Treat the global video lock as a parent/admin policy, not a child-facing toggle.
 - [ ] Add optional streaming time limits / auto-return behavior.
@@ -300,10 +332,10 @@ Priority: medium/low
 Priority: ongoing
 
 - [ ] Add health checks for source services, web administration, and browser mode.
-- [ ] Add structured logs around source switches, audio route changes, browser start/exit, video-policy changes, web-admin system actions, DRM failures, and recovery.
+- [ ] Add structured logs around source switches, audio route changes, browser start/exit, provider configuration changes, video-policy changes, web-admin system actions, DRM failures, and recovery.
 - [ ] Add recovery for crashes or power loss during a mode transition.
 - [ ] Test nightly auto-update across Pi 3, Pi 4, and Pi 5 where supported.
-- [ ] Add migration tests/checklists for any change to apt packages, systemd, sudoers, udev, PipeWire/WirePlumber, browser configuration, web-admin services, or boot/display settings.
+- [ ] Add migration tests/checklists for any change to apt packages, systemd, sudoers, udev, PipeWire/WirePlumber, browser configuration, provider schema, web-admin services, or boot/display settings.
 - [ ] Measure startup time, memory use, CPU use, dropped frames, and thermal behavior for streaming mode.
 - [ ] Preserve the ability to disable experimental features when they prove unreliable on a hardware generation.
 - [ ] Verify shutdown/restart/update actions cannot leave the device in an inconsistent state.
@@ -314,15 +346,17 @@ Priority: ongoing
 2. New media sources must go through the source/backend abstraction rather than adding provider conditionals throughout `app.py`.
 3. Browser streaming is a separate operating mode; do not bolt Chromium into the Pygame render loop.
 4. Video is optional. A global audio-only policy must prevent browser streaming from starting and must survive reboot/update.
-5. A source switch must be explicit, observable, and reversible.
-6. Existing devices must survive updates. Any system-level change needs both fresh-install setup and an idempotent migration.
-7. Provider availability is capability-based, not promised by name. DRM/browser compatibility can change outside this project.
-8. Keep credentials and cookies out of git. Browser profiles live only on the device.
-9. The web admin must expose explicit application/device actions, never a general-purpose remote shell.
-10. Local web administration is LAN-only by default. Password protection is optional, but when enabled it must be enforced consistently and stored securely.
-11. Log failures and gather evidence before adding special-case workarounds.
-12. Raspberry Pi 3 performance is a constraint, not an excuse for fragile global optimizations that hurt Pi 4/5.
-13. Keep the normal music UI simple even as the underlying architecture becomes more capable.
+5. Video providers are registry/configuration entries. The launcher and web admin must not require code changes for every compatible browser service.
+6. A source switch must be explicit, observable, and reversible.
+7. Existing devices must survive updates. Any system-level change needs both fresh-install setup and an idempotent migration.
+8. Provider availability is capability-based, not promised by name. DRM/browser compatibility can change outside this project.
+9. Keep credentials and cookies out of git. Browser profiles live only on the device.
+10. The web admin must expose explicit application/device actions, never a general-purpose remote shell.
+11. Local web administration is LAN-only by default. Password protection is optional, but when enabled it must be enforced consistently and stored securely.
+12. Provider URLs/configuration must be validated and must never be interpreted as commands or privileged local resource paths.
+13. Log failures and gather evidence before adding special-case workarounds.
+14. Raspberry Pi 3 performance is a constraint, not an excuse for fragile global optimizations that hurt Pi 4/5.
+15. Keep the normal music UI simple even as the underlying architecture becomes more capable.
 
 ## Suggested first implementation sequence
 
@@ -332,8 +366,8 @@ Priority: ongoing
 4. Add AirPlay audio.
 5. Add internet radio/local media.
 6. Introduce the shared settings/device-control layer needed by both touchscreen and future web administration.
-7. Add the local web admin with status, optional password protection, video lock, settings, update, restart, and shutdown controls.
-8. Add the Streaming launcher, global video policy, and kiosk-mode lifecycle.
+7. Add the local web admin with status, optional password protection, video lock, provider management, settings, update, restart, and shutdown controls.
+8. Add the provider registry plus Streaming launcher and kiosk-mode lifecycle.
 9. Validate YouTube first because it is useful without relying on the full commercial DRM matrix.
 10. Validate Netflix, Prime Video, Disney+, and WOW individually on Pi 3/4/5.
 11. Add parental controls and hardening after the technical path is proven.
