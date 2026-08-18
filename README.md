@@ -31,17 +31,22 @@ Planned directions include:
 - Bluetooth receiver mode so audio from arbitrary phone/tablet apps can play through the box
 - AirPlay audio, internet radio, and local/NAS media
 - an optional dedicated browser kiosk Streaming mode for services such as YouTube, Netflix, Prime Video, Disney+, and WOW
+- a configurable video-provider registry so additional browser-based streaming services can be added, edited, enabled/disabled, reordered, or removed from the web admin without changing application code
+- isolated browser profiles per video provider so provider logins/cookies remain separated and persistent on the device
 - a persistent **audio-only mode / video lock** so Streaming can be completely disabled even on video-capable hardware
 - a local **web administration interface** reachable by hostname/IP for parent/admin configuration
-- web controls for video/provider enablement, device status, audio/network settings, software updates, restart, and shutdown
+- optional password protection for the web admin; the owner can set, change, or remove the password from the admin area
+- web controls for video/provider management, device status, audio/network settings, software updates, restart, and shutdown
 - runtime hardware/capability detection so Raspberry Pi 3 can remain the audio baseline while Pi 4/5 target the full video experience
 - safe migrations for existing auto-updating devices as new system services and dependencies are introduced
 
-The planned web interface is local-network administration, not a public internet control panel. Privileged actions must be authenticated and exposed as explicit allow-listed device operations rather than arbitrary remote shell commands.
+The planned web interface is local-network administration, not a public internet control panel. Password protection can be enabled optionally; if no password is configured, the UI should clearly indicate that devices on the local network may be able to administer the box. Privileged actions are exposed as explicit allow-listed device operations rather than arbitrary remote shell commands.
+
+Video providers are planned as configuration entries rather than hard-coded application features. Built-in services act as presets, while additional compatible web-based providers can be added later. Custom providers remain unverified until tested because DRM/browser compatibility can vary by service and Raspberry Pi generation.
 
 Commercial video-provider support will be validated per service and hardware generation because browser/DRM requirements can change outside this project. The project will not bypass DRM or attempt to recreate provider players.
 
-See **[docs/ROADMAP.md](docs/ROADMAP.md)** for phases, architecture direction, hardware policy, web-admin requirements, and completion criteria.
+See **[docs/ROADMAP.md](docs/ROADMAP.md)** for phases, architecture direction, hardware policy, provider management, web-admin requirements, and completion criteria.
 
 ## Hardware
 
@@ -109,7 +114,7 @@ Touchscreen + Speaker
 
 Albums and playlists you play are automatically saved to the device. Kids can then browse and play them independently from the touchscreen.
 
-The future architecture described in the roadmap keeps Spotify as one backend while moving the UI toward provider-neutral playback state. Browser video streaming is intentionally planned as a separate, optional operating mode instead of being embedded into the Pygame render loop. A future local web admin will use the same settings/device-control layer as the touchscreen so video locks and system settings stay consistent.
+The future architecture described in the roadmap keeps Spotify as one backend while moving the UI toward provider-neutral playback state. Browser video streaming is intentionally planned as a separate, optional operating mode instead of being embedded into the Pygame render loop. A provider registry supplies the Streaming launcher, allowing compatible services to be managed through configuration rather than code changes. A future local web admin will use the same settings/device-control layer as the touchscreen so video locks, provider configuration, and system settings stay consistent.
 
 ## Settings Menu
 
