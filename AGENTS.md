@@ -37,8 +37,13 @@
 - The web admin may expose explicit controls such as video enable/disable, provider enable/disable, audio settings, network/Bluetooth configuration, update, restart, shutdown, and device status.
 - Web-admin HTTP handlers must never accept or construct arbitrary shell commands from request input. Privileged operations must be implemented as explicit, allow-listed application/device-control actions.
 - Keep read-only status APIs separate from privileged mutation APIs where practical.
-- Require authentication or a parent/admin PIN/password for configuration and system actions. Store credential material safely as a hash, never plaintext.
-- Protect state-changing requests against CSRF and accidental repeated actions, and rate-limit sensitive authentication/control paths where practical.
+- Admin password protection is optional. The owner must be able to enable it from the admin area, change the password later, or remove password protection again without SSH.
+- When no admin password is configured, keep the interface LAN-only and clearly show that local network users may be able to administer the device.
+- When a password is configured, require authentication before entering the admin interface and before configuration/system actions. Enforce that protection consistently across all admin routes.
+- Store only a modern salted password hash; never store or log the plaintext password.
+- Use session-based authentication with logout and reasonable expiry when password protection is enabled. Rate-limit failed login attempts.
+- Removing password protection must require an authenticated session and an explicit confirmation while protection is currently enabled.
+- Protect state-changing requests against CSRF and accidental repeated actions regardless of whether password protection is enabled, and rate-limit security-sensitive control paths where practical.
 - Require explicit confirmation for disruptive actions such as update, restart, shutdown, reset, or network changes.
 - Bind/expose the admin interface only to the local/LAN environment by default. Do not intentionally publish it to the internet as part of setup.
 - Never expose Spotify credentials, streaming-provider cookies/tokens, Widevine/provider sessions, passwords, or other sensitive account data through the web UI/API or logs.
@@ -69,7 +74,7 @@
 
 ## Testing and observability
 
-- Add or update tests for logic changes, especially playback state, source switching, stale asynchronous commands, capability detection, video-policy enforcement, web-admin authorization, privileged-action validation, and recovery behavior.
+- Add or update tests for logic changes, especially playback state, source switching, stale asynchronous commands, capability detection, video-policy enforcement, optional web-admin authentication, privileged-action validation, and recovery behavior.
 - For hardware/system changes, document and perform the most relevant real-device checks because unit tests cannot prove audio routing, DRM, display ownership, Bluetooth behavior, or network exposure.
 - Log source switches, audio-route changes, external service failures, browser-mode entry/exit, video-policy changes, web-admin system actions, migrations, and recovery paths with enough context to diagnose failures.
 - Do not log passwords, cookies, authentication tokens, Spotify credentials, provider session data, admin secrets, or other sensitive account information.
