@@ -1,15 +1,18 @@
 # Spotify-Box Roadmap
 
-This roadmap describes the planned evolution from a Spotify-only speaker into a small, simple media box that can handle multiple audio sources and, on capable hardware, browser-based video streaming.
+This roadmap describes the planned evolution from a Spotify-only speaker into a small, simple media box that can handle multiple audio sources and, on capable hardware, optional browser-based video streaming.
 
-The current product principle stays unchanged: the UI must remain simple, touch-friendly, predictable, and provide immediate feedback for every user action.
+The current product principle stays unchanged: the UI must remain simple, touch-friendly, predictable, and provide immediate feedback for every user action. Video must remain optional so the same software can also be operated permanently as an audio-only streaming box.
 
 ## Goals
 
 - Keep the current Spotify Connect experience working and reliable.
 - Allow audio from other phone apps without requiring a dedicated integration for every music service.
 - Add additional first-class audio sources such as AirPlay, internet radio, and local/NAS media.
-- Add a dedicated Streaming mode for browser-based services such as YouTube, Netflix, Prime Video, Disney+, and WOW.
+- Add an optional dedicated Streaming mode for browser-based services such as YouTube, Netflix, Prime Video, Disney+, and WOW.
+- Allow video/Streaming mode to be globally disabled so the device can be locked to audio-only operation.
+- Add a local web administration interface reachable through the box IP/hostname for configuration and device management.
+- Allow the web admin to enable/disable video, configure supported settings, inspect status, trigger updates, restart, and shut down the box.
 - Preserve Raspberry Pi 3 support for the core audio experience.
 - Treat browser/video streaming on Raspberry Pi 3 as experimental; target Raspberry Pi 4/5 for the full video experience.
 - Keep upgrades safe for devices already installed in the field.
@@ -21,10 +24,12 @@ The current product principle stays unchanged: the UI must remain simple, touch-
 - Do not try to turn the Raspberry Pi into a fully compatible certified Chromecast receiver.
 - Do not embed a heavy browser engine directly inside the Pygame UI unless the architecture is intentionally revisited later.
 - Do not sacrifice the simple kid-friendly UI just to expose every provider feature.
+- Do not expose the administration interface directly to the public internet by default.
+- Do not implement web-admin actions by accepting arbitrary shell commands from HTTP requests.
 
 ## Target architecture
 
-The application should move from a Spotify-specific playback stack to a source-based media architecture.
+The application should move from a Spotify-specific playback stack to a source-based media architecture with a separate local administration plane.
 
 ```text
 Mello UI
@@ -38,16 +43,24 @@ Mello UI
    |      +-- LocalMediaBackend
    |
    +-- StreamingManager
+   |      |
+   |      +-- VideoPolicy / video_enabled
+   |      +-- YouTube
+   |      +-- Netflix
+   |      +-- Prime Video
+   |      +-- Disney+
+   |      +-- WOW
+   |      +-- future browser providers
+   |
+   +-- DeviceControl / Settings
           |
-          +-- YouTube
-          +-- Netflix
-          +-- Prime Video
-          +-- Disney+
-          +-- WOW
-          +-- future browser providers
+          +-- local Web Admin
+          +-- update/restart/shutdown
+          +-- WiFi/Bluetooth/settings
+          +-- health/status
 ```
 
-Audio sources share a common playback model where practical. Browser streaming remains a separate operating mode because the browser needs to own the display and may require different audio/video services.
+Audio sources share a common playback model where practical. Browser streaming remains a separate operating mode because the browser needs to own the display and may require different audio/video services. The local web admin should call typed application/device-control APIs instead of reaching directly into Pygame internals or executing arbitrary commands.
 
 ## Phase 0 - Repository and update ownership
 
@@ -130,16 +143,17 @@ Priority: medium
 
 Spotify, Bluetooth receiver, AirPlay, radio, and local/network media can coexist behind the same source-selection model.
 
-## Phase 4 - Streaming launcher and browser kiosk mode
+## Phase 4 - Streaming launcher, video policy, and browser kiosk mode
 
 Priority: medium
 
-Video streaming should run as a dedicated system mode, not inside Pygame.
+Video streaming should run as a dedicated system mode, not inside Pygame. It must also be possible to disable it globally and operate the device as an audio-only box.
 
 Proposed lifecycle:
 
 ```text
 Mello/Pygame mode
+    -> check video_enabled policy
     -> user selects Streaming
     -> pause/stop active audio source
     -> persist Mello state
@@ -152,6 +166,12 @@ Mello/Pygame mode
     -> restart/resume Mello mode
 ```
 
+- [ ] Add persistent `video_enabled` / audio-only policy state.
+- [ ] When video is disabled, remove/hide the Streaming launcher from the child-facing UI and reject all attempts to start browser streaming.
+- [ ] Do not start or keep browser/compositor processes running while video is disabled.
+- [ ] Allow the policy to be changed from protected local settings and from the web administration interface.
+- [ ] If video is disabled remotely while Streaming mode is active, safely close the browser session and return to Mello/audio mode.
+- [ ] Keep per-provider enable/disable settings separate from the global video switch.
 - [ ] Add a clean `Streaming` entry point to the UI without cluttering the normal music experience.
 - [ ] Add a provider launcher for YouTube, Netflix, Prime Video, Disney+, WOW, and future providers.
 - [ ] Store provider definitions in configuration rather than hard-coding UI behavior.
@@ -165,7 +185,7 @@ Mello/Pygame mode
 
 ### Exit criteria
 
-The user can enter Streaming mode, select a provider, use it fullscreen, and reliably return to the normal Mello UI without rebooting.
+When video is enabled, the user can enter Streaming mode, select a provider, use it fullscreen, and reliably return to the normal Mello UI without rebooting. When video is disabled, the same device behaves as an audio-only box and no browser streaming path can be started.
 
 ## Phase 5 - Provider and DRM validation
 
@@ -195,42 +215,96 @@ Test matrix:
 - Video/browser streaming on Raspberry Pi 3 is experimental and should be aggressively optimized by stopping unneeded Mello/librespot processes while the browser runs.
 - Raspberry Pi 4 or newer is the target for a supported video experience.
 - Raspberry Pi 5 is the preferred target for the best responsiveness and future headroom.
+- Audio-only mode must remain fully supported on Pi 4/5 as well; video-capable hardware must not force the feature to be enabled.
 
-## Phase 6 - Streaming UX and parental controls
+## Phase 6 - Local web administration
+
+Priority: medium
+
+Add a lightweight local administration interface so a parent/admin can configure the box from a phone, tablet, or computer without navigating the child-facing touchscreen UI.
+
+Expected access:
+
+```text
+http://<box-hostname>.local/
+```
+
+or via the current LAN IP address.
+
+### Core controls
+
+- [ ] Show device status: hostname, IP address, software version, uptime, active source, playback state, update state, and relevant health information.
+- [ ] Add a global Video / Streaming enable-disable switch.
+- [ ] Add per-provider enable-disable controls for browser streaming services.
+- [ ] Allow audio-only operation to be selected and persisted across reboots/updates.
+- [ ] Expose safe audio settings such as speaker/Bluetooth volume levels, auto-pause, and progress-memory settings.
+- [ ] Expose source controls where useful: Spotify status, Bluetooth pairing/connection, AirPlay enablement, radio configuration, and local-media settings as those features are implemented.
+- [ ] Expose WiFi/network configuration with clear warnings that switching networks can disconnect the current browser session.
+- [ ] Add `Check for updates` and `Install update` actions with visible progress/result state.
+- [ ] Add restart and shutdown actions with explicit confirmation.
+- [ ] Consider factory reset only behind an additional confirmation/protection step.
+- [ ] Keep settings synchronized between touchscreen and web UI through one shared settings/service layer.
+
+### Security and architecture rules
+
+- [ ] Bind the admin interface to local/LAN access by default; never intentionally expose it to the public internet during installation.
+- [ ] Require authentication or a parent/admin PIN/password before allowing configuration or system actions.
+- [ ] Store password/PIN material safely as a hash, never plaintext in git or logs.
+- [ ] Protect state-changing requests against CSRF and accidental repeated submissions.
+- [ ] Rate-limit authentication attempts and security-sensitive actions where practical.
+- [ ] Use explicit typed/allow-listed actions for update, reboot, shutdown, networking, and service control. HTTP input must never become an arbitrary shell command.
+- [ ] Separate read-only status endpoints from privileged mutation endpoints.
+- [ ] Never expose Spotify credentials, browser cookies, Widevine/provider sessions, tokens, or other sensitive account information through the admin UI/API.
+- [ ] Require explicit confirmation for update, reboot, shutdown, reset, and network changes.
+- [ ] Log who/what action was requested and whether it succeeded, but never log passwords, cookies, tokens, or provider session data.
+- [ ] Make the web-admin service resilient to Mello/Pygame or browser-mode restarts so remote administration remains available when practical.
+- [ ] Add any new web service/systemd/firewall/sudoers dependencies to both fresh-install setup and `pi/migrate.sh`.
+
+### Exit criteria
+
+A parent/admin on the same local network can securely open the box by hostname/IP, inspect its state, toggle audio-only/video mode, change supported settings, update the software, and restart or shut down the box without SSH. The interface is not publicly exposed by default and cannot execute arbitrary commands.
+
+## Phase 7 - Streaming UX and parental controls
 
 Priority: medium/low
 
 - [ ] Keep provider selection intentionally small and icon-driven.
 - [ ] Add optional parent-controlled enable/disable toggles per streaming provider.
+- [ ] Treat the global video lock as a parent/admin policy, not a child-facing toggle.
 - [ ] Add optional streaming time limits / auto-return behavior.
 - [ ] Protect settings and account/logout actions behind the existing hidden/parent interaction pattern.
 - [ ] Decide whether browser navigation needs a small persistent system overlay or a gesture/physical button.
 - [ ] Make source/provider transitions immediately visible through loading and pressed states.
+- [ ] Ensure web-admin changes are reflected on the touchscreen without requiring a reboot where possible.
 
-## Phase 7 - Reliability and production hardening
+## Phase 8 - Reliability and production hardening
 
 Priority: ongoing
 
-- [ ] Add health checks for source services and browser mode.
-- [ ] Add structured logs around source switches, audio route changes, browser start/exit, DRM failures, and recovery.
+- [ ] Add health checks for source services, web administration, and browser mode.
+- [ ] Add structured logs around source switches, audio route changes, browser start/exit, video-policy changes, web-admin system actions, DRM failures, and recovery.
 - [ ] Add recovery for crashes or power loss during a mode transition.
 - [ ] Test nightly auto-update across Pi 3, Pi 4, and Pi 5 where supported.
-- [ ] Add migration tests/checklists for any change to apt packages, systemd, sudoers, udev, PipeWire/WirePlumber, browser configuration, or boot/display settings.
+- [ ] Add migration tests/checklists for any change to apt packages, systemd, sudoers, udev, PipeWire/WirePlumber, browser configuration, web-admin services, or boot/display settings.
 - [ ] Measure startup time, memory use, CPU use, dropped frames, and thermal behavior for streaming mode.
 - [ ] Preserve the ability to disable experimental features when they prove unreliable on a hardware generation.
+- [ ] Verify shutdown/restart/update actions cannot leave the device in an inconsistent state.
 
 ## Implementation rules
 
 1. Spotify must not regress while new sources are introduced.
 2. New media sources must go through the source/backend abstraction rather than adding provider conditionals throughout `app.py`.
 3. Browser streaming is a separate operating mode; do not bolt Chromium into the Pygame render loop.
-4. A source switch must be explicit, observable, and reversible.
-5. Existing devices must survive updates. Any system-level change needs both fresh-install setup and an idempotent migration.
-6. Provider availability is capability-based, not promised by name. DRM/browser compatibility can change outside this project.
-7. Keep credentials and cookies out of git. Browser profiles live only on the device.
-8. Log failures and gather evidence before adding special-case workarounds.
-9. Raspberry Pi 3 performance is a constraint, not an excuse for fragile global optimizations that hurt Pi 4/5.
-10. Keep the normal music UI simple even as the underlying architecture becomes more capable.
+4. Video is optional. A global audio-only policy must prevent browser streaming from starting and must survive reboot/update.
+5. A source switch must be explicit, observable, and reversible.
+6. Existing devices must survive updates. Any system-level change needs both fresh-install setup and an idempotent migration.
+7. Provider availability is capability-based, not promised by name. DRM/browser compatibility can change outside this project.
+8. Keep credentials and cookies out of git. Browser profiles live only on the device.
+9. The web admin must expose explicit application/device actions, never a general-purpose remote shell.
+10. Local web administration must be authenticated and LAN-only by default.
+11. Log failures and gather evidence before adding special-case workarounds.
+12. Raspberry Pi 3 performance is a constraint, not an excuse for fragile global optimizations that hurt Pi 4/5.
+13. Keep the normal music UI simple even as the underlying architecture becomes more capable.
 
 ## Suggested first implementation sequence
 
@@ -239,10 +313,12 @@ Priority: ongoing
 3. Add Bluetooth receiver mode.
 4. Add AirPlay audio.
 5. Add internet radio/local media.
-6. Add the Streaming launcher and kiosk-mode lifecycle.
-7. Validate YouTube first because it is useful without relying on the full commercial DRM matrix.
-8. Validate Netflix, Prime Video, Disney+, and WOW individually on Pi 3/4/5.
-9. Add parental controls and hardening after the technical path is proven.
+6. Introduce the shared settings/device-control layer needed by both touchscreen and future web administration.
+7. Add the local web admin with status, video lock, settings, update, restart, and shutdown controls.
+8. Add the Streaming launcher, global video policy, and kiosk-mode lifecycle.
+9. Validate YouTube first because it is useful without relying on the full commercial DRM matrix.
+10. Validate Netflix, Prime Video, Disney+, and WOW individually on Pi 3/4/5.
+11. Add parental controls and hardening after the technical path is proven.
 
 ## Documentation ownership
 
