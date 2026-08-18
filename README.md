@@ -21,6 +21,23 @@ Kids swipe through album covers and tap to play. Parents control the music libra
 - **Auto-updates** — Pulls latest changes from GitHub nightly
 - **No account needed on the device** — Authentication happens via Spotify on your phone
 
+## Roadmap
+
+The current release remains Spotify-first, but the project is planned to evolve into a source-based media box while keeping the simple kid-friendly UI.
+
+Planned directions include:
+
+- a provider-neutral playback layer and `SourceManager`
+- Bluetooth receiver mode so audio from arbitrary phone/tablet apps can play through the box
+- AirPlay audio, internet radio, and local/NAS media
+- a dedicated browser kiosk Streaming mode for services such as YouTube, Netflix, Prime Video, Disney+, and WOW
+- runtime hardware/capability detection so Raspberry Pi 3 can remain the audio baseline while Pi 4/5 target the full video experience
+- safe migrations for existing auto-updating devices as new system services and dependencies are introduced
+
+Commercial video-provider support will be validated per service and hardware generation because browser/DRM requirements can change outside this project. The project will not bypass DRM or attempt to recreate provider players.
+
+See **[docs/ROADMAP.md](docs/ROADMAP.md)** for phases, architecture direction, hardware policy, and completion criteria.
+
 ## Hardware
 
 Print the case from [MakerWorld](https://makerworld.com/en/models/2692843-distraction-free-spotify-player-for-kids).
@@ -33,6 +50,8 @@ Print the case from [MakerWorld](https://makerworld.com/en/models/2692843-distra
 | 5.1V 3A USB-C Power Supply | [Amazon](https://www.amazon.com/dp/B0CLV6WB4L) |
 | USB-C Panel Mount Bushing | [Amazon](https://www.amazon.com/dp/B0CDC1X4BY) |
 | Micro SD Card (16GB+) | — |
+
+The Raspberry Pi 3 remains the reference hardware for the current audio-focused experience. The roadmap treats browser/video streaming on Pi 3 as experimental and targets Raspberry Pi 4 or newer for a supported video experience.
 
 ## Quick Start
 
@@ -56,6 +75,8 @@ To install without anonymous usage analytics:
 ```bash
 curl -sSL https://raw.githubusercontent.com/emieljanson/mello/main/install.sh | bash -s -- --no-analytics
 ```
+
+> Repository ownership of fresh installs and auto-updates is tracked as the first roadmap phase. Until that work is implemented and verified, do not assume the installer/update path is already fork-local.
 
 ### 3. Connect Spotify
 
@@ -82,6 +103,8 @@ Touchscreen + Speaker
 ```
 
 Albums and playlists you play are automatically saved to the device. Kids can then browse and play them independently from the touchscreen.
+
+The future architecture described in the roadmap keeps Spotify as one backend while moving the UI toward provider-neutral playback state. Browser video streaming is intentionally planned as a separate operating mode instead of being embedded into the Pygame render loop.
 
 ## Settings Menu
 
@@ -118,7 +141,7 @@ Built a Mello? I'd love to see it! Share a photo on Twitter/X and tag [@emieljan
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines. Architecture-level changes should also follow [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Security
 
