@@ -18,12 +18,14 @@
 - Gaming is optional and independent from Video. The product must support audio-only, audio+video, audio+gaming, and full Audio+Video+Gaming configurations.
 - Every optional Audio source, Video provider, and Gaming provider must be individually enableable/disableable from the shared settings/Web Admin layer.
 - Disabled services must normally disappear from the normal user UI and must not remain launchable through alternate code paths.
+- Video and Gaming time controls are optional parent/admin policies. Daily budgets and weekly schedules must each be independently enableable/disableable for Video and Gaming.
 
 ## Roadmap and architecture direction
 
 - Read `docs/ROADMAP.md` before making architecture-level playback, audio-routing, browser, streaming, provider-registry, web-admin, Bluetooth, AirPlay, installer, or Raspberry Pi platform changes.
 - Read `docs/GAMING.md` before Gaming, Steam Link, Shadow PC, GeForce NOW, controller/input, or foreground-app handoff changes.
 - Read `docs/SERVICE-MANAGEMENT.md` before changing feature visibility, service enablement, provider availability, service lifecycle, or Web Admin service toggles.
+- Read `docs/USAGE-LIMITS.md` before changing Video/Gaming daily budgets, weekday/time schedules, usage accounting, time-policy enforcement, timezone handling, or temporary parent overrides.
 - Treat the roadmap documents as the current intended direction. If implementation reality requires changing them, update the relevant documentation in the same PR.
 - The project is evolving from a Spotify-only player into a source-based media box with independent Audio, Video, and Gaming layers. Do not spread provider-specific conditionals throughout `mello/app.py`.
 - New audio sources should be implemented behind a generic playback/source abstraction (`PlaybackBackend` / `SourceManager` or the equivalent architecture introduced by the roadmap).
@@ -53,6 +55,26 @@
 - Do not automatically enable newly introduced optional features on existing devices after an update. Preserve existing service choices during migrations.
 - Avoid unnecessary runtime work for disabled services, but do not stop shared infrastructure such as PipeWire, Bluetooth, NetworkManager, or the Web Admin just because one dependent feature is disabled.
 
+## Usage limits and schedules
+
+- Video and Gaming each have two independent optional time-policy controls: `daily_limit_enabled` and `schedule_enabled`.
+- The owner may use only a daily budget, only a weekly schedule, both together, or neither. If both are disabled for a category, time policy must not restrict that category at all.
+- Turning a daily budget or weekly schedule off must preserve its configured values for later re-enabling.
+- Effective launch permission combines global mode state, per-provider enabled state, hardware/software availability, any enabled weekly schedule, and any enabled daily budget. The strictest **enabled** rule wins.
+- A disabled daily budget means unlimited use from the quota perspective; an enabled schedule may still restrict access.
+- A disabled weekly schedule means unrestricted weekdays/times from the schedule perspective; an enabled daily budget may still restrict access.
+- Time policy must be enforced by the shared mode/device-control layer rather than trusting provider-specific playback state or UI.
+- By default, counted Video usage is foreground time owned by `VideoMode`, and counted Gaming usage is foreground time owned by `GamingMode`. Do not rely on Netflix, Steam, Shadow, GeForce NOW, or another provider to report reliable pause/play state.
+- While a category's daily budget is disabled, usage must not be deducted from that daily quota. Previously recorded usage for the day must be preserved so toggling the switch is not a reset mechanism.
+- Persist counted usage regularly and on clean mode exit so reboot/power cycling does not trivially bypass an enabled daily budget.
+- Daily reset, weekday calculation, and schedule windows use the configured local device timezone. Handle invalid clocks, timezone changes, and DST deterministically.
+- `time-blocked` is distinct from `disabled` and `unavailable`. The touchscreen and Web Admin should expose a clear reason plus remaining/next available time when relevant.
+- When an active session reaches an enabled quota or schedule boundary, warn the user where practical, persist accounting, close the provider cleanly, and return to Mello. Never power off the Raspberry Pi to enforce a limit.
+- If an Admin turns a time rule off while a session is running, stop enforcing that specific rule immediately without terminating an otherwise allowed session.
+- If an Admin enables a rule while a session is running and the current session violates the new rule, apply the new policy consistently and return to Mello after clear feedback.
+- Changing/toggling a budget or schedule must not silently reset today's usage. `Reset today's usage` is a separate explicit privileged Admin action.
+- Any temporary extra-time override must be explicit, parent/admin controlled, and time-bounded; never add a permanent child-facing bypass.
+
 ## Gaming mode
 
 - Gaming is an exclusive foreground mode alongside Audio and Video, coordinated through a shared `ModeManager`/foreground-mode boundary or equivalent architecture.
@@ -63,7 +85,7 @@
 - Steam Link should use a native adapter and is the first target Gaming provider.
 - Shadow PC should prefer Shadow's official Raspberry Pi ARM64 native client on supported hardware; browser Shadow is a fallback/secondary capability.
 - GeForce NOW on Raspberry Pi remains experimental until real-device validation proves a reliable path. Do not depend on unsupported-device, user-agent, or DRM bypasses.
-- Gaming launch must check persisted `gaming_enabled` and per-provider enabled state.
+- Gaming launch must check persisted `gaming_enabled`, per-provider enabled state, availability, and current Gaming time-policy result before launching.
 - Controller/input management should be shared across Gaming providers and must not break Bluetooth audio receiver/output roles.
 - Keep Steam, Shadow, NVIDIA, and other Gaming service authentication inside the native client or isolated browser profile; never collect those passwords in Mello settings.
 - Third-party Gaming client crashes must recover to Mello without requiring a reboot where practical.
@@ -72,7 +94,9 @@
 
 - The roadmap includes a local web administration interface reachable through the device hostname/IP on the local network.
 - Web settings and touchscreen settings must use one shared settings/device-control layer. Do not create two independent sources of truth.
-- The web admin may expose explicit controls such as per-service enable/disable, video enable/disable, provider management, Gaming enable/disable/provider management, controller status, audio settings, network/Bluetooth configuration, update, restart, shutdown, and device status.
+- The web admin may expose explicit controls such as per-service enable/disable, video enable/disable, provider management, Gaming enable/disable/provider management, controller status, Video/Gaming daily budgets and weekly schedules, audio settings, network/Bluetooth configuration, update, restart, shutdown, and device status.
+- Video and Gaming time settings must expose separate on/off switches for daily budget and weekly schedule. Do not force one rule to be enabled just because the other is used.
+- The Web Admin should show the configured device timezone/time, current time-policy result, used/remaining daily budget when enabled, and next allowed time window when schedule enforcement is enabled.
 - The Web Admin must continue to show disabled services so the owner can re-enable them even though they are hidden from the normal user interface.
 - Provider management must allow add, edit, enable/disable, reorder, remove, and restore built-in presets without requiring code changes where the provider type is safely configurable.
 - Web-admin HTTP handlers must never accept or construct arbitrary shell commands from request input. Privileged operations must be implemented as explicit, allow-listed application/device-control actions.
@@ -84,7 +108,7 @@
 - Use session-based authentication with logout and reasonable expiry when password protection is enabled. Rate-limit failed login attempts.
 - Removing password protection must require an authenticated session and an explicit confirmation while protection is currently enabled.
 - Protect state-changing requests against CSRF and accidental repeated actions regardless of whether password protection is enabled, and rate-limit security-sensitive control paths where practical.
-- Require explicit confirmation for disruptive actions such as update, restart, shutdown, reset, network changes, and destructive provider changes where appropriate.
+- Require explicit confirmation for disruptive actions such as update, restart, shutdown, reset, network changes, destructive provider changes, and resetting today's usage where appropriate.
 - Bind/expose the admin interface only to the local/LAN environment by default. Do not intentionally publish it to the internet as part of setup.
 - Never expose Spotify credentials, streaming-provider cookies/tokens, Gaming-provider credentials/session data, Widevine/provider sessions, passwords, or other sensitive account data through the web UI/API or logs.
 - The web-admin service should remain available independently of Pygame/browser/native-Gaming mode where practical so a parent can recover or manage the device remotely on the LAN.
@@ -106,7 +130,7 @@
 - This app runs on Raspberry Pi devices that auto-update from git. Always consider devices already in the field.
 - If you add a Python dependency to `requirements.txt`, it is installed on the next auto-update.
 - If you change system configuration or system dependencies — including apt packages, sudoers, systemd units, udev, boot/display configuration, PipeWire/WirePlumber, Bluetooth profiles, browsers/compositors, DRM packages, native Gaming clients, controller/input packages, web-admin services, firewall/network binding, or service permissions — you MUST add an idempotent migration in `pi/migrate.sh` as well as updating the fresh-install setup where applicable.
-- If persisted provider/service configuration or other settings schemas change, add safe schema migration/version handling so existing custom providers, enabled/disabled choices, and settings are preserved.
+- If persisted provider/service/time-policy configuration or other settings schemas change, add safe schema migration/version handling so existing custom providers, enabled/disabled choices, daily-budget/schedule toggles, configured windows, usage accounting, and other settings are preserved.
 - Auto-update runs migrations after pulling code. Without a migration, existing devices can diverge from fresh installs and break.
 - Migrations must be safe to run once on partially configured systems and should log what they changed.
 - When adding a new service or native client, verify fresh install, migration from an existing install, enable/start behavior, restart behavior, exit/recovery behavior, and removal/rollback behavior where relevant.
@@ -118,7 +142,7 @@
 
 ## Testing and observability
 
-- Add or update tests for logic changes, especially playback state, source switching, service enablement/availability, launcher filtering, disabled launch rejection, stale asynchronous commands, capability detection, video-policy enforcement, gaming-policy enforcement, mode switching, provider-registry CRUD/order/validation, optional web-admin authentication, privileged-action validation, and recovery behavior.
+- Add or update tests for logic changes, especially playback state, source switching, service enablement/availability, launcher filtering, disabled launch rejection, Video/Gaming daily-budget and schedule toggles, combined time-policy decisions, usage persistence/reset behavior, time boundaries, timezone/DST handling, stale asynchronous commands, capability detection, video-policy enforcement, gaming-policy enforcement, mode switching, provider-registry CRUD/order/validation, optional web-admin authentication, privileged-action validation, and recovery behavior.
 - For hardware/system changes, document and perform the most relevant real-device checks because unit tests cannot prove audio routing, DRM, display ownership, controller mapping, native client behavior, Bluetooth behavior, or network exposure.
-- Log source switches, mode switches, audio-route changes, external service failures, browser-mode entry/exit, Gaming client entry/exit, provider/service configuration changes, video/gaming policy changes, web-admin system actions, migrations, and recovery paths with enough context to diagnose failures.
+- Log source switches, mode switches, audio-route changes, external service failures, browser-mode entry/exit, Gaming client entry/exit, provider/service configuration changes, time-policy changes/expiry events, video/gaming policy changes, web-admin system actions, migrations, and recovery paths with enough context to diagnose failures.
 - Do not log passwords, cookies, authentication tokens, Spotify credentials, provider session data, Gaming account/session data, admin secrets, or other sensitive account information.
